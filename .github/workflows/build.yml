@@ -1,0 +1,53 @@
+name: IPA bauen
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: XcodeGen installieren
+        run: brew install xcodegen
+
+      - name: Xcode-Projekt erzeugen
+        run: xcodegen generate
+
+      - name: App bauen (unsigniert, KSign signiert später)
+        run: |
+          xcodebuild \
+            -project SkyJumper.xcodeproj \
+            -scheme SkyJumper \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: IPA packen
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SkyJumper.app Payload/
+          zip -qry SkyJumper.ipa Payload
+
+      - name: IPA als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkyJumper-ipa
+          path: SkyJumper.ipa
+
+      - name: IPA als Release veröffentlichen (direkter Download-Link fürs iPhone)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Sky Jumper Build ${{ github.run_number }}
+          files: SkyJumper.ipa
